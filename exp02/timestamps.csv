@@ -1,0 +1,11 @@
+extracted_frame,timestamp_seconds,timestamp_formatted,filename
+1,0.0,00:00:00.000,frame_0001_time_0.000s.jpg
+2,1.0,00:00:01.000,frame_0002_time_1.000s.jpg
+3,2.0,00:00:02.000,frame_0003_time_2.000s.jpg
+4,3.0,00:00:03.000,frame_0004_time_3.000s.jpg
+5,4.0,00:00:04.000,frame_0005_time_4.000s.jpg
+6,5.0,00:00:05.000,frame_0006_time_5.000s.jpg
+7,6.0,00:00:06.000,frame_0007_time_6.000s.jpg
+8,7.0,00:00:07.000,frame_0008_time_7.000s.jpg
+9,8.0,00:00:08.000,frame_0009_time_8.000s.jpg
+10,9.0,00:00:09.000,frame_0010_time_9.000s.jpg
