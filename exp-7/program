@@ -1,0 +1,1153 @@
+# EXPERIMENT 07
+# VIDEO ACTIVITY RECOGNITION USING RNN AND LSTM
+#
+# Libraries:
+# OpenCV
+# NumPy
+# Matplotlib
+#
+# NO TensorFlow
+# NO PyTorch
+# ============================================================
+
+import cv2
+import numpy as np
+
+
+import os
+
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+except ModuleNotFoundError:
+    raise SystemExit(
+        "ERROR: matplotlib is not installed. Run: python -m pip install matplotlib"
+    )
+
+
+# ============================================================
+# 1. VIDEO FILE
+# ============================================================
+
+VIDEO_PATH = r"C:\Users\MEGANADH\OneDrive\Desktop\ai driven\exp31.mp4"
+
+NUM_FRAMES = 20
+
+FEATURE_SIZE = 64
+
+RNN_HIDDEN_SIZE = 32
+
+LSTM_HIDDEN_SIZE = 32
+
+
+# ============================================================
+# 2. CHECK VIDEO
+# ============================================================
+
+print("=" * 60)
+print("SMART SURVEILLANCE VIDEO ACTIVITY RECOGNITION")
+print("=" * 60)
+
+print("\nChecking video...")
+
+if not os.path.exists(VIDEO_PATH):
+
+    print("\nERROR: Video file not found!")
+
+    print(
+        "Please put an MP4 video in the same folder "
+        "as this Python program."
+    )
+
+    print(
+        "\nExpected location:"
+    )
+
+    print(
+        os.path.abspath(VIDEO_PATH)
+    )
+
+    print(
+        "\nExample:"
+    )
+
+    print(
+        "sample_video.mp4"
+    )
+
+    exit()
+
+
+# ============================================================
+# 3. OPEN VIDEO
+# ============================================================
+
+cap = cv2.VideoCapture(
+    VIDEO_PATH
+)
+
+
+if not cap.isOpened():
+
+    print(
+        "ERROR: Could not open video."
+    )
+
+    exit()
+
+
+fps = cap.get(
+    cv2.CAP_PROP_FPS
+)
+
+total_frames = int(
+    cap.get(
+        cv2.CAP_PROP_FRAME_COUNT
+    )
+)
+
+width = int(
+    cap.get(
+        cv2.CAP_PROP_FRAME_WIDTH
+    )
+)
+
+height = int(
+    cap.get(
+        cv2.CAP_PROP_FRAME_HEIGHT
+    )
+)
+
+
+duration = 0
+
+if fps > 0:
+
+    duration = (
+        total_frames / fps
+    )
+
+
+print("\nVIDEO INFORMATION")
+print("-" * 60)
+
+print(
+    "File:",
+    VIDEO_PATH
+)
+
+print(
+    "Width:",
+    width
+)
+
+print(
+    "Height:",
+    height
+)
+
+print(
+    "FPS:",
+    round(fps, 2)
+)
+
+print(
+    "Total Frames:",
+    total_frames
+)
+
+print(
+    "Duration:",
+    round(duration, 2),
+    "seconds"
+)
+
+
+cap.release()
+
+
+# ============================================================
+# 4. EXTRACT VIDEO FRAMES
+# ============================================================
+
+def extract_frames(
+    video_path,
+    number_of_frames
+):
+
+    cap = cv2.VideoCapture(
+        video_path
+    )
+
+    total = int(
+        cap.get(
+            cv2.CAP_PROP_FRAME_COUNT
+        )
+    )
+
+
+    if total <= 0:
+
+        cap.release()
+
+        return []
+
+
+    # Select equally spaced frames
+
+    frame_numbers = np.linspace(
+        0,
+        total - 1,
+        number_of_frames
+    ).astype(int)
+
+
+    frames = []
+
+
+    for frame_number in frame_numbers:
+
+        cap.set(
+            cv2.CAP_PROP_POS_FRAMES,
+            int(frame_number)
+        )
+
+
+        success, frame = cap.read()
+
+
+        if success:
+
+            # Convert BGR to RGB
+
+            frame = cv2.cvtColor(
+                frame,
+                cv2.COLOR_BGR2RGB
+            )
+
+
+            frames.append(
+                frame
+            )
+
+
+    cap.release()
+
+
+    return frames
+
+
+# ============================================================
+# 5. EXTRACT FRAMES
+# ============================================================
+
+print("\nExtracting video frames...")
+
+frames = extract_frames(
+    VIDEO_PATH,
+    NUM_FRAMES
+)
+
+
+print(
+    "Frames extracted:",
+    len(frames)
+)
+
+
+if len(frames) == 0:
+
+    print(
+        "ERROR: No frames extracted."
+    )
+
+    exit()
+
+
+# ============================================================
+# 6. DISPLAY SELECTED FRAMES
+# ============================================================
+
+print(
+    "\nDisplaying selected frames..."
+)
+
+
+display_indices = np.linspace(
+    0,
+    len(frames) - 1,
+    min(5, len(frames))
+).astype(int)
+
+
+plt.figure(
+    figsize=(15, 4)
+)
+
+
+for i, index in enumerate(
+    display_indices
+):
+
+    plt.subplot(
+        1,
+        len(display_indices),
+        i + 1
+    )
+
+
+    plt.imshow(
+        frames[index]
+    )
+
+
+    plt.title(
+        "Frame " + str(index + 1)
+    )
+
+
+    plt.axis(
+        "off"
+    )
+
+
+plt.tight_layout()
+
+plt.show()
+
+
+# ============================================================
+# 7. FEATURE EXTRACTION USING OPENCV
+# ============================================================
+#
+# Since TensorFlow/PyTorch are not being used, we create
+# simple visual features using OpenCV.
+#
+# Features:
+#
+# 1. Mean intensity
+# 2. Standard deviation
+# 3. Edge density
+# 4. Motion
+#
+# These features form the input sequence for RNN/LSTM.
+# ============================================================
+
+
+def extract_frame_features(
+    frames
+):
+
+    feature_sequence = []
+
+    previous_gray = None
+
+
+    for frame in frames:
+
+        # Resize
+
+        small = cv2.resize(
+            frame,
+            (128, 128)
+        )
+
+
+        # Convert to grayscale
+
+        gray = cv2.cvtColor(
+            small,
+            cv2.COLOR_RGB2GRAY
+        )
+
+
+        # ----------------------------------------------------
+        # Feature 1: Mean intensity
+        # ----------------------------------------------------
+
+        mean_intensity = np.mean(
+            gray
+        )
+
+
+        # ----------------------------------------------------
+        # Feature 2: Standard deviation
+        # ----------------------------------------------------
+
+        std_intensity = np.std(
+            gray
+        )
+
+
+        # ----------------------------------------------------
+        # Feature 3: Edge density
+        # ----------------------------------------------------
+
+        edges = cv2.Canny(
+            gray,
+            50,
+            150
+        )
+
+
+        edge_density = np.mean(
+            edges > 0
+        )
+
+
+        # ----------------------------------------------------
+        # Feature 4: Motion
+        # ----------------------------------------------------
+
+        if previous_gray is None:
+
+            motion = 0.0
+
+        else:
+
+            difference = cv2.absdiff(
+                gray,
+                previous_gray
+            )
+
+
+            motion = np.mean(
+                difference
+            )
+
+
+        previous_gray = gray.copy()
+
+
+        # ----------------------------------------------------
+        # Create feature vector
+        # ----------------------------------------------------
+
+        feature_vector = np.array([
+
+            mean_intensity,
+
+            std_intensity,
+
+            edge_density * 255,
+
+            motion
+
+        ])
+
+
+        feature_sequence.append(
+            feature_vector
+        )
+
+
+    return np.array(
+        feature_sequence
+    )
+
+
+# ============================================================
+# 8. EXTRACT FEATURES
+# ============================================================
+
+print(
+    "\nExtracting frame-level visual features..."
+)
+
+
+features = extract_frame_features(
+    frames
+)
+
+
+print(
+    "Original feature shape:",
+    features.shape
+)
+
+
+# ============================================================
+# 9. NORMALIZE FEATURES
+# ============================================================
+
+feature_min = features.min(
+    axis=0
+)
+
+feature_max = features.max(
+    axis=0
+)
+
+
+features_normalized = (
+    features - feature_min
+) / (
+    feature_max - feature_min + 1e-8
+)
+
+
+print(
+    "Normalized feature shape:",
+    features_normalized.shape
+)
+
+
+# ============================================================
+# 10. EXPAND FEATURES
+# ============================================================
+#
+# We repeat the visual features to create a larger
+# feature representation similar to a feature vector
+# obtained from a CNN.
+# ============================================================
+
+
+repeat_count = FEATURE_SIZE // 4
+
+
+sequence = np.tile(
+    features_normalized,
+    (1, repeat_count)
+)
+
+
+print(
+    "Sequence shape:",
+    sequence.shape
+)
+
+
+# ============================================================
+# 11. RNN IMPLEMENTATION
+# ============================================================
+
+
+class SimpleRNN:
+
+    def __init__(
+        self,
+        input_size,
+        hidden_size
+    ):
+
+        self.input_size = input_size
+
+        self.hidden_size = hidden_size
+
+
+        # Random initialization
+
+        np.random.seed(42)
+
+
+        self.Wx = (
+            np.random.randn(
+                hidden_size,
+                input_size
+            ) * 0.1
+        )
+
+
+        self.Wh = (
+            np.random.randn(
+                hidden_size,
+                hidden_size
+            ) * 0.1
+        )
+
+
+        self.b = np.zeros(
+            hidden_size
+        )
+
+
+    def forward(
+        self,
+        sequence
+    ):
+
+        hidden = np.zeros(
+            self.hidden_size
+        )
+
+
+        hidden_states = []
+
+
+        for x in sequence:
+
+            hidden = np.tanh(
+
+                np.dot(
+                    self.Wx,
+                    x
+                )
+
+                +
+
+                np.dot(
+                    self.Wh,
+                    hidden
+                )
+
+                +
+
+                self.b
+
+            )
+
+
+            hidden_states.append(
+                hidden.copy()
+            )
+
+
+        return np.array(
+            hidden_states
+        )
+
+
+# ============================================================
+# 12. CREATE RNN
+# ============================================================
+
+print(
+    "\nRunning RNN sequence learning..."
+)
+
+
+rnn = SimpleRNN(
+
+    input_size=FEATURE_SIZE,
+
+    hidden_size=RNN_HIDDEN_SIZE
+)
+
+
+rnn_states = rnn.forward(
+    sequence
+)
+
+
+print(
+    "RNN output shape:",
+    rnn_states.shape
+)
+
+
+# ============================================================
+# 13. LSTM IMPLEMENTATION
+# ============================================================
+
+
+class SimpleLSTM:
+
+    def __init__(
+        self,
+        input_size,
+        hidden_size
+    ):
+
+        self.input_size = input_size
+
+        self.hidden_size = hidden_size
+
+
+        np.random.seed(42)
+
+
+        # Combined weight matrix
+        #
+        # Four gates:
+        #
+        # Forget
+        # Input
+        # Candidate
+        # Output
+
+
+        self.W = (
+
+            np.random.randn(
+
+                4 * hidden_size,
+
+                input_size + hidden_size
+
+            ) * 0.1
+
+        )
+
+
+        self.b = np.zeros(
+            4 * hidden_size
+        )
+
+
+    def sigmoid(
+        self,
+        x
+    ):
+
+        x = np.clip(
+            x,
+            -50,
+            50
+        )
+
+        return 1 / (
+            1 + np.exp(-x)
+        )
+
+
+    def forward(
+        self,
+        sequence
+    ):
+
+        hidden = np.zeros(
+            self.hidden_size
+        )
+
+
+        cell = np.zeros(
+            self.hidden_size
+        )
+
+
+        hidden_states = []
+
+
+        for x in sequence:
+
+            # Combine input and previous hidden state
+
+            combined = np.concatenate(
+                [
+                    x,
+                    hidden
+                ]
+            )
+
+
+            gates = (
+
+                np.dot(
+                    self.W,
+                    combined
+                )
+
+                +
+
+                self.b
+
+            )
+
+
+            # Split into four gates
+
+            forget_gate = self.sigmoid(
+
+                gates[
+                    0:self.hidden_size
+                ]
+
+            )
+
+
+            input_gate = self.sigmoid(
+
+                gates[
+                    self.hidden_size:
+                    2 * self.hidden_size
+                ]
+
+            )
+
+
+            candidate = np.tanh(
+
+                gates[
+                    2 * self.hidden_size:
+                    3 * self.hidden_size
+                ]
+
+            )
+
+
+            output_gate = self.sigmoid(
+
+                gates[
+                    3 * self.hidden_size:
+                    4 * self.hidden_size
+                ]
+
+            )
+
+
+            # Cell state
+
+            cell = (
+
+                forget_gate * cell
+
+                +
+
+                input_gate * candidate
+
+            )
+
+
+            # Hidden state
+
+            hidden = (
+
+                output_gate
+
+                *
+
+                np.tanh(cell)
+
+            )
+
+
+            hidden_states.append(
+                hidden.copy()
+            )
+
+
+        return np.array(
+            hidden_states
+        )
+
+
+# ============================================================
+# 14. CREATE LSTM
+# ============================================================
+
+print(
+    "\nRunning LSTM sequence learning..."
+)
+
+
+lstm = SimpleLSTM(
+
+    input_size=FEATURE_SIZE,
+
+    hidden_size=LSTM_HIDDEN_SIZE
+)
+
+
+lstm_states = lstm.forward(
+    sequence
+)
+
+
+print(
+    "LSTM output shape:",
+    lstm_states.shape
+)
+
+
+# ============================================================
+# 15. ACTIVITY SCORE
+# ============================================================
+#
+# This is a demonstration classifier.
+#
+# In a real trained system, the RNN/LSTM output would be
+# connected to a trained Softmax classifier using labeled
+# videos.
+# ============================================================
+
+
+def classify_activity(
+    rnn_output,
+    lstm_output,
+    motion_values
+):
+
+    average_motion = np.mean(
+        motion_values
+    )
+
+
+    temporal_variation = np.mean(
+        np.abs(
+            np.diff(
+                lstm_output,
+                axis=0
+            )
+        )
+    )
+
+
+    score = (
+        average_motion
+        +
+        temporal_variation * 50
+    )
+
+
+    # Demonstration threshold
+
+    if score > 5:
+
+        activity = "Running / Fast Movement"
+
+    else:
+
+        activity = "Walking / Normal Movement"
+
+
+    return activity, score
+
+
+# ============================================================
+# 16. CLASSIFY
+# ============================================================
+
+motion_values = features_normalized[:, 3]
+
+
+activity, score = classify_activity(
+
+    rnn_states,
+
+    lstm_states,
+
+    motion_values
+
+)
+
+
+# ============================================================
+# 17. DISPLAY RNN/LSTM OUTPUT
+# ============================================================
+
+print(
+    "\n============================================"
+)
+
+print(
+    "ACTIVITY RECOGNITION RESULT"
+)
+
+print(
+    "============================================"
+)
+
+
+print(
+    "Video:",
+    VIDEO_PATH
+)
+
+
+print(
+    "Number of frames:",
+    len(frames)
+)
+
+
+print(
+    "RNN hidden state size:",
+    RNN_HIDDEN_SIZE
+)
+
+
+print(
+    "LSTM hidden state size:",
+    LSTM_HIDDEN_SIZE
+)
+
+
+print(
+    "Activity:",
+    activity
+)
+
+
+print(
+    "Activity Score:",
+    round(
+        float(score),
+        4
+    )
+)
+
+
+print(
+    "============================================"
+)
+
+
+# ============================================================
+# 18. VISUALIZE MOTION
+# ============================================================
+
+plt.figure(
+    figsize=(10, 4)
+)
+
+
+plt.plot(
+    motion_values,
+    marker="o"
+)
+
+
+plt.title(
+    "Motion Variation Across Video Frames"
+)
+
+
+plt.xlabel(
+    "Frame Number"
+)
+
+
+plt.ylabel(
+    "Normalized Motion"
+)
+
+
+plt.grid(
+    True
+)
+
+
+plt.tight_layout()
+
+plt.show()
+
+
+# ============================================================
+# 19. VISUALIZE RNN OUTPUT
+# ============================================================
+
+plt.figure(
+    figsize=(10, 4)
+)
+
+
+plt.plot(
+    np.mean(
+        rnn_states,
+        axis=1
+    ),
+    marker="o"
+)
+
+
+plt.title(
+    "RNN Temporal Feature Representation"
+)
+
+
+plt.xlabel(
+    "Frame Number"
+)
+
+
+plt.ylabel(
+    "RNN Hidden State"
+)
+
+
+plt.grid(
+    True
+)
+
+
+plt.tight_layout()
+
+plt.show()
+
+
+# ============================================================
+# 20. VISUALIZE LSTM OUTPUT
+# ============================================================
+
+plt.figure(
+    figsize=(10, 4)
+)
+
+
+plt.plot(
+    np.mean(
+        lstm_states,
+        axis=1
+    ),
+    marker="o"
+)
+
+
+plt.title(
+    "LSTM Temporal Feature Representation"
+)
+
+
+plt.xlabel(
+    "Frame Number"
+)
+
+
+plt.ylabel(
+    "LSTM Hidden State"
+)
+
+
+plt.grid(
+    True
+)
+
+
+plt.tight_layout()
+
+plt.show()
+
+
+# ============================================================
+# 21. SAVE FEATURES
+# ============================================================
+
+np.save(
+    "video_features.npy",
+    sequence
+)
+
+
+np.save(
+    "rnn_features.npy",
+    rnn_states
+)
+
+
+np.save(
+    "lstm_features.npy",
+    lstm_states
+)
+
+
+print(
+    "\nFeature files saved:"
+)
+
+print(
+    "1. video_features.npy"
+)
+
+print(
+    "2. rnn_features.npy"
+)
+
+print(
+    "3. lstm_features.npy"
+)
+
+
+print(
+    "\nExperiment completed successfully."
+)

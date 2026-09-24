@@ -1,0 +1,145 @@
+import cv2
+import numpy as np
+
+# -------------------------------
+# Load Traffic Video
+# -------------------------------
+video_path = r"C:\Users\MEGANADH\Downloads\AI_Video_Prompt_Seconds__T_compressed.mp4"
+cap = cv2.VideoCapture(video_path)
+
+if not cap.isOpened():
+    print("Error: Cannot open video")
+    exit()
+
+print("Video Loaded Successfully")
+
+
+# -------------------------------
+# Read First Frame
+# -------------------------------
+ret, frame1 = cap.read()
+
+if not ret:
+    print("Cannot read first frame")
+    exit()
+
+
+# Convert first frame to gray
+previous_gray = cv2.cvtColor(
+    frame1,
+    cv2.COLOR_BGR2GRAY
+)
+
+
+# -------------------------------
+# Process Video Frames
+# -------------------------------
+while True:
+
+    ret, frame = cap.read()
+
+    if not ret:
+        break
+
+
+    # Convert current frame to gray
+    current_gray = cv2.cvtColor(
+        frame,
+        cv2.COLOR_BGR2GRAY
+    )
+
+
+    # --------------------------------
+    # Motion Estimation using Optical Flow
+    # --------------------------------
+    flow = cv2.calcOpticalFlowFarneback(
+        previous_gray,
+        current_gray,
+        None,
+        0.5,
+        3,
+        15,
+        3,
+        5,
+        1.2,
+        0
+    )
+
+
+    # Calculate magnitude and direction
+    magnitude, angle = cv2.cartToPolar(
+        flow[:,:,0],
+        flow[:,:,1]
+    )
+
+
+    # --------------------------------
+    # Visualize Motion Vectors
+    # --------------------------------
+
+    height, width = current_gray.shape
+
+    step = 25
+
+
+    for y in range(0, height, step):
+
+        for x in range(0, width, step):
+
+            dx = flow[y,x,0]
+            dy = flow[y,x,1]
+
+
+            # Draw motion arrow
+            cv2.arrowedLine(
+                frame,
+                (x,y),
+                (int(x+dx), int(y+dy)),
+                (0,255,0),
+                2,
+                tipLength=0.3
+            )
+
+
+    # --------------------------------
+    # Motion Detection
+    # --------------------------------
+
+    motion_value = np.mean(magnitude)
+
+
+    cv2.putText(
+        frame,
+        "Motion Level: {:.2f}".format(motion_value),
+        (20,40),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1,
+        (0,0,255),
+        2
+    )
+
+
+    # Display output
+    cv2.imshow(
+        "Smart Traffic Motion Estimation",
+        frame
+    )
+
+
+    # Update previous frame
+    previous_gray = current_gray.copy()
+
+
+    # Press q to exit
+    if cv2.waitKey(30) & 0xff == ord('q'):
+        break
+
+
+
+# -------------------------------
+# Release Resources
+# -------------------------------
+cap.release()
+cv2.destroyAllWindows()
+
+print("Motion Estimation Completed Successfully")
