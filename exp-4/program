@@ -1,0 +1,251 @@
+
+import cv2
+import os
+import time
+
+# ============================================================
+# SMART CITY CCTV VIDEO COMPRESSION AND ANALYTICS
+# ============================================================
+
+# ----------- INPUT AND OUTPUT VIDEO PATHS -------------------
+input_video = r"C:\Users\MEGANADH\Downloads\AI_Video_Prompt_Seconds__T.mp4"
+compressed_video = r"C:\Users\MEGANADH\Downloads\AI_Video_Prompt_Seconds__T_compressed.mp4"
+analytics_video = r"C:\Users\MEGANADH\Downloads\AI_Video_Prompt_Seconds__T_analytics.mp4"
+
+# Check whether input video exists
+if not os.path.exists(input_video):
+    print("ERROR: Input video not found!")
+    print("Check the video path:")
+    print(input_video)
+    exit()
+
+# ============================================================
+# 1. OPEN INPUT VIDEO
+# ============================================================
+
+cap = cv2.VideoCapture(input_video)
+
+if not cap.isOpened():
+    print("ERROR: Unable to open video.")
+    exit()
+
+# Get video properties
+fps = cap.get(cv2.CAP_PROP_FPS)
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+duration = frame_count / fps if fps > 0 else 0
+
+print("\n========== ORIGINAL VIDEO ==========")
+print("Resolution :", width, "x", height)
+print("FPS        :", fps)
+print("Frames     :", frame_count)
+print("Duration   :", round(duration, 2), "seconds")
+
+# ============================================================
+# 2. VIDEO COMPRESSION
+# ============================================================
+
+# Reduce resolution to 50%
+new_width = width // 2
+new_height = height // 2
+
+# MP4 codec
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+
+out = cv2.VideoWriter(
+    compressed_video,
+    fourcc,
+    fps,
+    (new_width, new_height)
+)
+
+if not out.isOpened():
+    print("ERROR: Unable to create compressed video.")
+    cap.release()
+    exit()
+
+start_time = time.time()
+
+while True:
+
+    ret, frame = cap.read()
+
+    if not ret:
+        break
+
+    # Resize frame
+    compressed_frame = cv2.resize(
+        frame,
+        (new_width, new_height),
+        interpolation=cv2.INTER_AREA
+    )
+
+    # Write compressed frame
+    out.write(compressed_frame)
+
+cap.release()
+out.release()
+
+compression_time = time.time() - start_time
+
+# ============================================================
+# 3. FILE SIZE AND COMPRESSION RATIO
+# ============================================================
+
+original_size = os.path.getsize(input_video)
+compressed_size = os.path.getsize(compressed_video)
+
+original_mb = original_size / (1024 * 1024)
+compressed_mb = compressed_size / (1024 * 1024)
+
+compression_ratio = original_size / compressed_size
+storage_reduction = ((original_size - compressed_size)
+                     / original_size) * 100
+
+print("\n========== COMPRESSION RESULTS ==========")
+print("Original Size      :", round(original_mb, 2), "MB")
+print("Compressed Size    :", round(compressed_mb, 2), "MB")
+print("Compression Ratio  :", round(compression_ratio, 2), ":1")
+print("Storage Reduction  :", round(storage_reduction, 2), "%")
+print("Processing Time    :", round(compression_time, 2), "seconds")
+
+# ============================================================
+# 4. VIDEO ANALYTICS - MOTION DETECTION
+# ============================================================
+
+cap = cv2.VideoCapture(input_video)
+
+if not cap.isOpened():
+    print("ERROR: Unable to open video for analytics.")
+    exit()
+
+# Output video properties
+out = cv2.VideoWriter(
+    analytics_video,
+    fourcc,
+    fps,
+    (width, height)
+)
+
+# Background subtractor
+background_subtractor = cv2.createBackgroundSubtractorMOG2(
+    history=500,
+    varThreshold=50,
+    detectShadows=True
+)
+
+print("\n========== VIDEO ANALYTICS ==========")
+print("Motion detection started...")
+
+while True:
+
+    ret, frame = cap.read()
+
+    if not ret:
+        break
+
+    # Apply background subtraction
+    mask = background_subtractor.apply(frame)
+
+    # Remove noise
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (5, 5)
+    )
+
+    mask = cv2.morphologyEx(
+        mask,
+        cv2.MORPH_OPEN,
+        kernel
+    )
+
+    mask = cv2.morphologyEx(
+        mask,
+        cv2.MORPH_DILATE,
+        kernel
+    )
+
+    # Find moving objects
+    contours, _ = cv2.findContours(
+        mask,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    motion_count = 0
+
+    for contour in contours:
+
+        area = cv2.contourArea(contour)
+
+        # Ignore very small objects/noise
+        if area < 500:
+            continue
+
+        x, y, w, h = cv2.boundingRect(contour)
+
+        # Draw bounding box
+        cv2.rectangle(
+            frame,
+            (x, y),
+            (x + w, y + h),
+            (0, 255, 0),
+            2
+        )
+
+        motion_count += 1
+
+    # Display motion count
+    cv2.putText(
+        frame,
+        "Moving Objects: " + str(motion_count),
+        (20, 40),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1,
+        (0, 0, 255),
+        2
+    )
+
+    # Write analytics video
+    out.write(frame)
+
+    # Display
+    cv2.imshow(
+        "Smart City CCTV Analytics",
+        frame
+    )
+
+    # Press Q to stop
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+out.release()
+cv2.destroyAllWindows()
+
+# ============================================================
+# 5. FINAL RESULTS
+# ============================================================
+
+print("\n==========================================")
+print("        EXPERIMENT COMPLETED")
+print("==========================================")
+
+print("\nOriginal Video:")
+print(input_video)
+
+print("\nCompressed Video:")
+print(compressed_video)
+
+print("\nAnalytics Video:")
+print(analytics_video)
+
+print("\nStorage Reduction:",
+      round(storage_reduction, 2), "%")
+
+print("Compression Ratio:",
+      round(compression_ratio, 2), ":1")
+
+print("\nVideo compression and analytics completed successfully.")
